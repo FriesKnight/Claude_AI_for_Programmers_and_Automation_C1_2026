@@ -5,9 +5,13 @@
 # A dataclass is a simple way to create a class whose main purpose is to hold data.
 from dataclasses import dataclass
 
+from typing import Generic, TypeVar
+
 # AsyncAnthropic is Anthropic's asynchronous Python SDK client.
 # We use it to send requests to the Claude API without blocking the FastAPI application while waiting for a response.
 from anthropic import AsyncAnthropic
+
+from pydantic import BaseModel, ValidationError
 
 # get_settings() gives us application configuration
 from app.config import get_settings
@@ -16,6 +20,9 @@ from app.config import get_settings
 # Custom exception for Claude-related configuration problems.
 # This lets us distinguish configuration errors from other runtime errors.
 class ClaudeConfigurationError(RuntimeError):
+    pass
+
+class ClaudeResponseError(RuntimeError):
     pass
 
 
@@ -27,6 +34,21 @@ class ClaudeTextResult:
     model: str # The Claude model that produced the response.
     input_tokens: int # Number of tokens Claude processed as input.
     output_tokens: int # Number of tokens Claude generated as output.
+
+
+StructuredModel = TypeVar(
+    "StructuredModel",
+    bound=BaseModel,
+)
+
+@dataclass(frozen=True)
+class ClaudeStructuredResult(
+    Generic[StructuredModel]
+):
+    data: StructuredModel
+    model: str
+    input_tokens: int
+    output_tokens: int
 
 
 # Wrapper around the Anthropic SDK.
@@ -155,6 +177,52 @@ class ClaudeService:
             model=message.model, # The model reported by Anthropic in the response.
             input_tokens=message.usage.input_tokens, # How many tokens Claude processed as input.
             output_tokens=message.usage.output_tokens, # How many tokens Claude generated as output.
+        )
+
+    async def generate_structured(
+        self,
+        user_message: str,
+        *,
+        output_model: type[StructuredModel],
+        max_tokens: int = 500,
+        system: str | None = None,
+    ) -> ClaudeStructuredResult[StructuredModel]:
+        request = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": user_message,
+                }
+            ],
+            "output_format": output_model,
+        }
+
+        if system:
+            request["system"] = system
+
+        try:
+            message = await self.client.messages.parse(
+                **request
+            )
+        except ValidationError as exc:
+            raise ClaudeResponseError(
+                "Claude structured output failed "
+                "application validation."
+            ) from exc
+
+        if message.parsed_output is None:
+            raise ClaudeResponseError(
+                "Claude returned no parsed "
+                "structured output."
+            )
+
+        return ClaudeStructuredResult(
+            data=message.parsed_output,
+            model=message.model,
+            input_tokens=message.usage.input_tokens,
+            output_tokens=message.usage.output_tokens,
         )
 
     # Close the Anthropic SDK client and release
