@@ -1,6 +1,39 @@
+from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-class HealthResponse(BaseModel):
-    status: Literal["ok"] = "ok"
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+
+class TicketCategory(str, Enum):
+    DELIVERY = "delivery"
+    RETURN = "return"
+    REFUND = "refund"
+    BILLING = "billing"
+    PRODUCT = "product"
+    ACCOUNT = "account"
+    GENERAL = "general"
+    OTHER = "other"
+
+
+class Sentiment(str, Enum):
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+
+
+class Priority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    URGENT = "urgent"
+
+
+class HealthResponse(StrictModel):
+    status: Literal["ok"]

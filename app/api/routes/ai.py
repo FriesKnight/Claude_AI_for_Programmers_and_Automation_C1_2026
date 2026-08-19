@@ -5,8 +5,13 @@ from app.prompts.summarise import (
 )
 from app.schemas.ai import (
     SummariseRequest,
-    SummariseResponse
+    SummariseResponse,
+    AnalyseRequest,
+    AnalyseResponse
 )
+
+from app.schemas.usage import AIUsage
+from app.services.analysis_service import AnalysisService
 
 from app.services.claude_service import ClaudeService
 
@@ -35,4 +40,33 @@ async def summarise_text(
         model=result.model,
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
+    )
+
+
+@router.post(
+    "/analyse",
+    response_model=AnalyseResponse,
+)
+async def analyse_ticket(
+    request: AnalyseRequest,
+) -> AnalyseResponse:
+    claude_service = ClaudeService()
+    analyse_service = AnalysisService(
+        claude_service
+    )
+
+    try: 
+        result = await analyse_service.analyse(
+            request.message
+        )
+    finally:
+        await claude_service.close()
+
+    return AnalyseResponse(
+        analysis=result.data,
+        usage=AIUsage(
+            model=result.model,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+        )
     )
