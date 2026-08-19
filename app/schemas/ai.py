@@ -28,7 +28,7 @@ class AnalyseRequest(StrictModel):
         min_length=5,
         max_length=5000,
     )
-    
+
 
 class TicketAnalysis(StrictModel):
     summary: str = Field(
@@ -78,4 +78,19 @@ class TicketAnalysis(StrictModel):
 
 class AnalyseResponse(StrictModel):
     analysis: TicketAnalysis
+    usage: AIUsage
+
+
+class GenerateResponseRequest(StrictModel):
+    customer_message: str = Field(
+        min_length=5,
+        max_length=5000,
+    )
+
+
+class GenerateResponseResponse(StrictModel):
+    draft_response: str = Field(
+        min_length=1,
+        max_length=5000,
+    )
     usage: AIUsage

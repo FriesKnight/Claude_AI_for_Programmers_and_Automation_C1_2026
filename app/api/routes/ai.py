@@ -10,6 +10,19 @@ from app.schemas.ai import (
     AnalyseResponse
 )
 
+from app.schemas.ai import (
+    AnalyseRequest,
+    AnalyseResponse,
+    GenerateResponseRequest,
+    GenerateResponseResponse,
+    SummariseRequest,
+    SummariseResponse,
+)
+from app.services.response_service import (
+    ResponseService,
+)
+
+
 from app.schemas.usage import AIUsage
 from app.services.analysis_service import AnalysisService
 
@@ -26,7 +39,7 @@ async def summarise_text(
 ) -> SummariseResponse:
     claude_service = ClaudeService()
 
-    try: 
+    try:
         result = await claude_service.generate_text(
             request.text,
             system=SUMMARISE_SYSTEM_PROMPT,
@@ -55,7 +68,7 @@ async def analyse_ticket(
         claude_service
     )
 
-    try: 
+    try:
         result = await analyse_service.analyse(
             request.message
         )
@@ -69,4 +82,32 @@ async def analyse_ticket(
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
         )
+    )
+
+@router.post(
+    "/generate-response",
+    response_model=GenerateResponseResponse,
+)
+async def generate_response(
+    request: GenerateResponseRequest,
+) -> GenerateResponseResponse:
+    claude_service = ClaudeService()
+    response_service = ResponseService(
+        claude_service
+    )
+
+    try:
+        result = await response_service.generate(
+            request.customer_message
+        )
+    finally:
+        await claude_service.close()
+
+    return GenerateResponseResponse(
+        draft_response=result.text,
+        usage=AIUsage(
+            model=result.model,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+        ),
     )
