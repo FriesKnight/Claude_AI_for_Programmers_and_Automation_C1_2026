@@ -8,6 +8,7 @@ from app.schemas.common import (
     TicketStatus,
 )
 from app.schemas.order import OrderContext
+from app.schemas.faq import FAQSource
 
 
 class TicketCreateRequest(StrictModel):
@@ -38,7 +39,7 @@ class TicketResponse(StrictModel):
 
     # Trusted enrichment is added later by workflows/tools.
     order_context: OrderContext | None = None
-    faq_context: list[dict] = Field(
+    faq_context: list[FAQSource] = Field(
         default_factory=list,
     )
     draft_response: str | None = None
