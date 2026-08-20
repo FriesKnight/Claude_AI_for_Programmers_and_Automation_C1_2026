@@ -1,3 +1,5 @@
+from enum import Enum
+
 from pydantic import Field, model_validator
 
 from app.schemas.common import (
