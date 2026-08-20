@@ -10,6 +10,7 @@ from app.schemas.ai import (
     AnalyseResponse,
     GenerateResponseRequest,
     GenerateResponseResponse,
+    ResponseContextUsed,
 )
 
 from app.schemas.usage import AIUsage
@@ -89,13 +90,16 @@ async def generate_response(
 
     try:
         result = await response_service.generate_response(
-            request.message
+            request.customer_message
         )
     finally:
         await claude_service.close()
 
     return GenerateResponseResponse(
         draft_response=result.text,
+        # No trusted order/FAQ lookup is wired in yet (Day 2 Exercise 2),
+        # so nothing verified was actually used to ground this response.
+        context_used=ResponseContextUsed(order_id=None),
         usage=AIUsage(
             model=result.model,
             input_tokens=result.input_tokens,

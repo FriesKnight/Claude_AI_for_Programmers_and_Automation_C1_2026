@@ -186,3 +186,20 @@ Trusted data worth retrieving before generating a response:
   by topic instead of left to the model to guess or omit
 - customer identity/account lookup, so the review flag can also carry
   enough context for the human reviewer.
+
+### Update — live code now matches the instructor's schema
+
+When merging the instructor's Day 2 pushes, Exercise 2
+(`exercises/day2/02_ground_generate_response.md`) turned out to build
+directly on their original `customer_message`/`response_generation.py`
+structure, adding `customer_id`, `order_id`, and a `context_used` field
+to `GenerateResponseResponse`. Kept diverging from that would mean
+rebuilding their grounding exercise on a different schema by hand, so
+the live code (`app/schemas/ai.py`, `app/services/response_service.py`,
+`app/api/routes/ai.py`) was updated to adopt their `customer_message`
+version instead of the `message` version documented above.
+
+The write-up and test results above are left as-is — they're an accurate
+record of what was actually built and tested for this exercise. The
+route currently returns `context_used: {"order_id": null}` since no
+trusted order/FAQ lookup is wired in yet; that's Exercise 2's job.

@@ -28,4 +28,18 @@ class OrderRepository:
         order_id: str,
     ) -> OrderContext | None:
         # Exercise 01: participants implement the customer-scoped query.
-        raise NotImplementedError
+        # Scope the query to the customer_id and order_id, and apply the projection.
+        document = await self.collection.find_one(
+            {
+                "customer_id": customer_id,
+                "order_id": order_id,
+            },
+            ORDER_CONTEXT_PROJECTION
+        )
+
+        # No matching document found; return None to indicate absence of order.
+        if document is None:
+            return None
+
+        # Valiidate the db data before the rest of the app uses it. This ensures that the app only works with valid data.
+        return OrderContext.model_validate(document)
