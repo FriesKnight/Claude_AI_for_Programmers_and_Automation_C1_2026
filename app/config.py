@@ -27,6 +27,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    mongodb_uri: SecretStr = SecretStr(
+        "mongodb://localhost:27017",
+    )
+
+    mongodb_database: str = "supportops_ai"
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
