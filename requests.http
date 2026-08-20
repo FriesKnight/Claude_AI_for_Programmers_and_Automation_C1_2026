@@ -1,0 +1,57 @@
+@baseUrl = http://127.0.0.1:8000
+
+### Health check
+GET {{baseUrl}}/health
+
+### Summarise a support message
+POST {{baseUrl}}/summarise
+Content-Type: application/json
+
+{
+  "text": "My order was supposed to arrive three days ago and I still haven't received it. I paid extra for expedited shipping and I'm getting really frustrated with the lack of updates."
+}
+
+### Analyse a ticket (structured output)
+POST {{baseUrl}}/analyse
+Content-Type: application/json
+
+{
+  "message": "I was charged twice for order #8823 and the tracking hasn't updated in 6 days. I need this sorted before my card statement closes."
+}
+
+### Generate a response — no order reference (ungrounded)
+POST {{baseUrl}}/generate-response
+Content-Type: application/json
+
+{
+  "customer_message": "Whats the status of my order?"
+}
+
+### Generate a response — valid customer + order pair (grounded)
+POST {{baseUrl}}/generate-response
+Content-Type: application/json
+
+{
+  "customer_message": "Whats the status of my order?",
+  "customer_id": "CUST-101",
+  "order_id": "ORD-1001"
+}
+
+### Generate a response — same order, wrong customer (should refuse to ground)
+POST {{baseUrl}}/generate-response
+Content-Type: application/json
+
+{
+  "customer_message": "Whats the status of my order?",
+  "customer_id": "CUST-102",
+  "order_id": "ORD-1001"
+}
+
+### Generate a response — order_id without customer_id (should 422)
+POST {{baseUrl}}/generate-response
+Content-Type: application/json
+
+{
+  "customer_message": "Whats the status of my order?",
+  "order_id": "ORD-1001"
+}
