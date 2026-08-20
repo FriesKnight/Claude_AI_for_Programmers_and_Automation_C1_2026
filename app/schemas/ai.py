@@ -82,15 +82,47 @@ class AnalyseResponse(StrictModel):
 
 
 class GenerateResponseRequest(StrictModel):
+    # The customer message remains untrusted input
     customer_message: str = Field(
         min_length=5,
         max_length=5000,
     )
 
+    # Customer and Order intentifiers
+    customer_id: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=50,
+    )
+
+    order_id: str | None = Field(
+        default=None,
+        min_length=3,
+        max_length=50,
+    )
+
+    @model_validator(mode="after")
+    def validate_order_context(
+        self,
+    ) -> "GenerateResponseRequest":
+        # An order lookup cannot be safely performed without both a customer_id and an order_id. If one is provided, the other must be as well.
+        if (
+            self.order_id and not self.customer_id
+        ):
+            raise ValueError(
+                "customer_id is required when order_id is provided"
+            )
+
+        return self
+
+class ResponseContextUsed(StrictModel):
+    # Make trusted context available to the app for logging and debugging purposes. This is not sent to Claude.
+    order_id: str | None = None
 
 class GenerateResponseResponse(StrictModel):
     draft_response: str = Field(
         min_length=1,
         max_length=5000,
     )
+    context_used: ResponseContextUsed
     usage: AIUsage
