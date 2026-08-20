@@ -1,5 +1,5 @@
-from app.prompts.response_generation import (
-    RESPONSE_GENERATION_SYSTEM_PROMPT,
+from app.prompts.generate_response import (
+    GENERATE_RESPONSE_SYSTEM_PROMPT,
 )
 from app.services.claude_service import (
     ClaudeService,
@@ -14,12 +14,17 @@ class ResponseService:
     ) -> None:
         self.claude_service = claude_service
 
-    async def generate(
+    async def generate_response(
         self,
-        customer_message: str,
+        message: str,
     ) -> ClaudeTextResult:
+        user_prompt = (
+            "Customer support message:\n"
+            + message
+        )
+
         return await self.claude_service.generate_text(
-            customer_message,
-            system=RESPONSE_GENERATION_SYSTEM_PROMPT,
+            user_prompt,
+            system=GENERATE_RESPONSE_SYSTEM_PROMPT,
             max_tokens=300,
         )

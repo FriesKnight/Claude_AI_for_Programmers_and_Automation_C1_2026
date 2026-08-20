@@ -7,24 +7,14 @@ from app.schemas.ai import (
     SummariseRequest,
     SummariseResponse,
     AnalyseRequest,
-    AnalyseResponse
-)
-
-from app.schemas.ai import (
-    AnalyseRequest,
     AnalyseResponse,
     GenerateResponseRequest,
     GenerateResponseResponse,
-    SummariseRequest,
-    SummariseResponse,
 )
-from app.services.response_service import (
-    ResponseService,
-)
-
 
 from app.schemas.usage import AIUsage
 from app.services.analysis_service import AnalysisService
+from app.services.response_service import ResponseService
 
 from app.services.claude_service import ClaudeService
 
@@ -84,6 +74,7 @@ async def analyse_ticket(
         )
     )
 
+
 @router.post(
     "/generate-response",
     response_model=GenerateResponseResponse,
@@ -97,8 +88,8 @@ async def generate_response(
     )
 
     try:
-        result = await response_service.generate(
-            request.customer_message
+        result = await response_service.generate_response(
+            request.message
         )
     finally:
         await claude_service.close()
@@ -109,5 +100,5 @@ async def generate_response(
             model=result.model,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
-        ),
+        )
     )

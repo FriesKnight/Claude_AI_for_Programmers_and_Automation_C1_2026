@@ -82,15 +82,12 @@ class AnalyseResponse(StrictModel):
 
 
 class GenerateResponseRequest(StrictModel):
-    customer_message: str = Field(
+    message: str = Field(
         min_length=5,
         max_length=5000,
     )
 
 
 class GenerateResponseResponse(StrictModel):
-    draft_response: str = Field(
-        min_length=1,
-        max_length=5000,
-    )
+    draft_response: str
     usage: AIUsage
