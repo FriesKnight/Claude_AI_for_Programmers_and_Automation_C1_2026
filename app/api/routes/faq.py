@@ -1,26 +1,21 @@
 from fastapi import APIRouter
-
 from app.database import get_database
-from app.repositories.faq_repository import (
-    FAQRepository,
-)
+from app.repositories.faq_repository import FAQRepository
 from app.schemas.faq import (
     FAQAskRequest,
     FAQAskResponse,
 )
 from app.schemas.usage import AIUsage
 from app.services import faq_service
-from app.services.claude_service import (
-    ClaudeService,
-)
-from app.services.faq_service import (
-    FAQService,
-)
+from app.services.claude_service import ClaudeService
+from app.services.faq_service import FAQService
+
 
 router = APIRouter(
     prefix="/faq",
     tags=["faq"],
 )
+
 
 @router.post(
     "/ask",
@@ -41,31 +36,26 @@ async def ask_faq(
 
     try:
         result = await service.ask(
-            request.question,
+            request.question
         )
     finally:
         await claude_service.close()
 
+    # If no Claude answer call happened, usage remains None.
     usage = None
 
     if result.model is not None:
         usage = AIUsage(
             model=result.model,
-            input_tokens=(
-                result.input_tokens or 0
-            ),
-            output_tokens=(
-                result.output_tokens or 0
-            ),
+            input_tokens=result.input_tokens or 0,
+            output_tokens=result.output_tokens or 0,
         )
-
 
     return FAQAskResponse(
         answer=result.answer,
         sources=result.sources,
-        requires_human_review=result.requires_human_review,
-        model=result.model,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
+        requires_human_review=(
+            result.requires_human_review
+        ),
         usage=usage,
     )
