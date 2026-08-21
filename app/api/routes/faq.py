@@ -64,8 +64,5 @@ async def ask_faq(
         answer=result.answer,
         sources=result.sources,
         requires_human_review=result.requires_human_review,
-        model=result.model,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
         usage=usage,
     )

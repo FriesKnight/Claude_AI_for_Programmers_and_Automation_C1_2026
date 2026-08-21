@@ -26,6 +26,7 @@ NO_APPROVED_FAQ_ANSWER = (
     "request for human review."
 )
 
+@dataclass(frozen=True)
 class FAQAnswerResult:
     answer: str
     sources: list[FAQSource]
@@ -83,9 +84,9 @@ class FAQService:
                 ), 
                 system= FAQ_ANSWER_SYSTEM_PROMPT,
                 output_model=(
-                    FAQAnswerDecision,
+                    FAQAnswerDecision
                 ),
-                max_tokens=300,
+                max_tokens=600,
             )
         )
 
@@ -96,6 +97,6 @@ class FAQService:
                 not result.data.supported_by_sources
             ),
             model=result.model,
-            input_tokens=result.input_tokens_used,
-            output_tokens=result.output_tokens_used,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
