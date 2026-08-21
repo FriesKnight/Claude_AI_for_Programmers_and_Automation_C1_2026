@@ -1,10 +1,15 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-
 from app.repositories.faq_repository import FAQRepository
 from app.repositories.order_repository import OrderRepository
-from app.schemas.common import TicketStatus
-from app.schemas.ticket import TicketCreateRequest, TicketResponse
+from app.schemas.common import (
+    Priority,
+    TicketStatus,
+)
+from app.schemas.ticket import (
+    TicketCreateRequest,
+    TicketResponse,
+)
 from app.schemas.usage import AIUsage
 from app.schemas.workflow import (
     ProcessTicketRequest,
@@ -15,17 +20,15 @@ from app.services.response_service import ResponseService
 from app.services.ticket_service import TicketService
 
 
-# One result object represents the outcome of the entire workflow.
 @dataclass(frozen=True)
 class WorkflowProcessResult:
+    # Final workflow output plus execution and Claude usage metadata.
     ticket: TicketResponse
     executed_steps: list[WorkflowStep]
     analysis_usage: AIUsage
     response_usage: AIUsage
 
 
-# This service does not replace the existing services/repositories.
-# It coordinates them in an application-owned sequence.
 class WorkflowService:
     def __init__(
         self,
@@ -36,8 +39,7 @@ class WorkflowService:
         order_repository: OrderRepository,
         faq_repository: FAQRepository,
     ) -> None:
-        # Dependencies are injected so this service does not create its own
-        # Claude client or MongoDB connection.
+        # Dependencies are injected so this service only coordinates the workflow.
         self.analysis_service = analysis_service
         self.response_service = response_service
         self.ticket_service = ticket_service
@@ -48,19 +50,30 @@ class WorkflowService:
         self,
         request: ProcessTicketRequest,
     ) -> WorkflowProcessResult:
-        executed_steps: list[WorkflowStep] = []
+        # Record which workflow stages actually execute.
+        steps: list[WorkflowStep] = []
 
-        # 1. ANALYSIS — always runs; nothing else can be decided without it.
-        analysis_result = await self.analysis_service.analyse(
-            request.message
+        # First, ask Claude to analyse the incoming customer message.
+        analysis_result = (
+            await self.analysis_service
+            .analyse(request.message)
         )
+        steps.append(
+            WorkflowStep.ANALYSIS
+        )
+
         analysis = analysis_result.data
-        executed_steps.append(WorkflowStep.ANALYSIS)
-
-        # 2. ORDER_LOOKUP — only if required AND an order_id was actually given.
         order_context = None
-        order_lookup_unresolved = False
+        faq_context = []
 
+        # Urgent tickets or explicit AI recommendations require human review.
+        requires_human_review = (
+            analysis.needs_human_review
+            or analysis.priority
+            == Priority.URGENT
+        )
+
+        # Retrieve trusted order context only when analysis says it is required.
         if analysis.needs_order_lookup:
             if request.order_id:
                 order_context = (
@@ -70,84 +83,124 @@ class WorkflowService:
                         request.order_id,
                     )
                 )
-                executed_steps.append(WorkflowStep.ORDER_LOOKUP)
+                steps.append(
+                    WorkflowStep.ORDER_LOOKUP
+                )
 
-                if order_context is None:
-                    order_lookup_unresolved = True
-            else:
-                # Analysis says an order matters, but nothing to look up.
-                # Never invent an order_id — treat as unresolved.
-                order_lookup_unresolved = True
+            # Missing required order context causes escalation.
+            if order_context is None:
+                requires_human_review = True
 
-        # 3. FAQ_LOOKUP — only if required.
-        faq_context: list = []
-        faq_lookup_unresolved = False
-
+        # Retrieve relevant approved FAQs only when analysis requires them.
         if analysis.needs_faq_lookup:
-            faq_context = await self.faq_repository.search(
-                analysis.faq_query,
-                limit=3,
+            faq_context = (
+                await self.faq_repository
+                .search(
+                    analysis.faq_query
+                    or request.message,
+                    limit=3,
+                )
             )
-            executed_steps.append(WorkflowStep.FAQ_LOOKUP)
+            steps.append(
+                WorkflowStep.FAQ_LOOKUP
+            )
 
+            # Missing required FAQ context also causes escalation.
             if not faq_context:
-                faq_lookup_unresolved = True
+                requires_human_review = True
 
-        # 4. DATABASE_INSERT — persist before generating a response, so an
-        # audit record exists even if response generation fails downstream.
-        ticket = await self.ticket_service.create(
-            TicketCreateRequest(
-                customer_id=request.customer_id,
-                order_id=request.order_id,
-                message=request.message,
-            ),
-            analysis,
+        # Create the initial ticket using the original request and AI analysis.
+        ticket = (
+            await self.ticket_service
+            .create(
+                TicketCreateRequest(
+                    customer_id=(
+                        request.customer_id
+                    ),
+                    order_id=(
+                        request.order_id
+                    ),
+                    message=request.message,
+                ),
+                analysis,
+            )
         )
-        executed_steps.append(WorkflowStep.DATABASE_INSERT)
-
-        # 5. RESPONSE_GENERATION — always runs, using only verified context.
-        response_result = await self.response_service.generate_draft(
-            request.message,
-            order_context=order_context,
-            faq_context=faq_context,
+        steps.append(
+            WorkflowStep.DATABASE_INSERT
         )
-        executed_steps.append(WorkflowStep.RESPONSE_GENERATION)
 
-        # 6. Final status — application-owned, never Claude's decision.
-        final_status = ticket.status
-
-        if (
-            order_lookup_unresolved
-            or faq_lookup_unresolved
-        ):
-            final_status = TicketStatus.NEEDS_HUMAN_REVIEW
-        elif final_status == TicketStatus.ANALYSED:
-            final_status = TicketStatus.PROCESSED
-
-        # 7. DATABASE_UPDATE — always runs, persists the final state.
-        updated_ticket = ticket.model_copy(
-            update={
-                "order_context": order_context,
-                "faq_context": faq_context,
-                "draft_response": response_result.text,
-                "status": final_status,
-                "updated_at": datetime.now(timezone.utc),
-            }
+        # Generate a customer-facing draft using any trusted context retrieved.
+        response_result = (
+            await self.response_service
+            .generate_draft(
+                request.message,
+                order_context=order_context,
+                faq_context=faq_context,
+            )
         )
-        ticket = await self.ticket_service.save(updated_ticket)
-        executed_steps.append(WorkflowStep.DATABASE_UPDATE)
+        steps.append(
+            WorkflowStep.RESPONSE_GENERATION
+        )
 
+        # Determine whether the workflow can finish automatically.
+        final_status = (
+            TicketStatus.NEEDS_HUMAN_REVIEW
+            if requires_human_review
+            else TicketStatus.PROCESSED
+        )
+
+        # Combine the original ticket with all context and generated results.
+        updated_ticket = (
+            TicketResponse.model_validate(
+                {
+                    **ticket.model_dump(
+                        mode="python"
+                    ),
+                    "order_context":
+                        order_context,
+                    "faq_context":
+                        faq_context,
+                    "draft_response":
+                        response_result.text,
+                    "status":
+                        final_status,
+                    "updated_at":
+                        datetime.now(
+                            timezone.utc
+                        ),
+                }
+            )
+        )
+
+        # Persist the completed workflow state back to the database.
+        updated_ticket = (
+            await self.ticket_service
+            .save(updated_ticket)
+        )
+        steps.append(
+            WorkflowStep.DATABASE_UPDATE
+        )
+
+        # Return the completed ticket, workflow history, and both Claude usages.
         return WorkflowProcessResult(
-            ticket=ticket,
-            executed_steps=executed_steps,
+            ticket=updated_ticket,
+            executed_steps=steps,
             analysis_usage=AIUsage(
                 model=analysis_result.model,
-                input_tokens=analysis_result.input_tokens,
-                output_tokens=analysis_result.output_tokens,
+                input_tokens=(
+                    analysis_result.input_tokens
+                ),
+                output_tokens=(
+                    analysis_result.output_tokens
+                ),
             ),
             response_usage=AIUsage(
                 model=response_result.model,
-                input_tokens=response_result.input_tokens,
-                output_tokens=response_result.output_tokens,
+                input_tokens=(
+                    response_result.input_tokens
+                ),
+                output_tokens=(
+                    response_result.output_tokens
+                ),
             ),
         )
