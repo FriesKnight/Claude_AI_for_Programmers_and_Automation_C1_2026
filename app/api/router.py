@@ -7,9 +7,11 @@ from app.api.routes.ticket import (
 )
 from app.api.routes.faq import router as faq_router
 from app.api.routes.workflows import router as workflows_router
+from app.api.routes.agent import router as agent_router
 api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(ai_router)
 api_router.include_router(tickets_router)
 api_router.include_router(faq_router)
 api_router.include_router(workflows_router)
+api_router.include_router(agent_router)
